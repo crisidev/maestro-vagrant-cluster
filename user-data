@@ -1,0 +1,209 @@
+#cloud-config
+
+---
+coreos:
+  etcd:
+    addr: $public_ipv4:4001
+    peer-addr: $public_ipv4:7001
+  etcd2:
+    advertise-client-urls: http://$public_ipv4:2379
+    initial-advertise-peer-urls: http://$private_ipv4:2380
+    listen-client-urls: http://0.0.0.0:2379,http://0.0.0.0:4001
+    listen-peer-urls: http://$private_ipv4:2380,http://$private_ipv4:7001
+    discovery: https://discovery.etcd.io/4af72b5a7c40ba766d0cb36168e7bc39
+  flannel:
+    interface: $public_ipv4
+  fleet:
+    public-ip: $public_ipv4
+    metadata: region=virtualbox
+  units:
+  - name: etcd2.service
+    command: start
+  - name: flanneld.service
+    command: start
+    drop-ins:
+    - name: 50-network-config.conf
+      content: |
+        [Service]
+        ExecStartPre=/usr/bin/etcdctl set /coreos.com/network/config '{"Network": "10.1.0.0/16"}'
+  - name: fleet.service
+    command: start
+  - name: docker-tcp.socket
+    command: start
+    enable: true
+    content: |
+      [Unit]
+      Description=Docker Socket for the API
+
+      [Socket]
+      ListenStream=2375
+      Service=docker.service
+      BindIPv6Only=both
+
+      [Install]
+      WantedBy=sockets.target
+  - name: maestro.service
+    command: start
+    enable: true
+    content: |
+      [Unit]
+      Description=Initialise Maestro
+      After=flanneld.service
+      Requires=flanneld.service
+
+      [Service]
+      Type=oneshot
+      ExecStart=/usr/bin/mkdir -p /var/maestro
+      ExecStart=/usr/bin/mkdir -p /run/maestro/env/core
+      ExecStart=/usr/bin/mkdir -p /run/maestro/env/user
+      ExecStart=/usr/bin/mkdir -p /run/maestro/containers
+      ExecStart=-/usr/bin/etcdctl mkdir /maestro.io/apps
+      ExecStart=/usr/bin/etcdctl set /skydns/io/maestro/hub '{"host":"172.17.8.100"}'
+      ExecStart=/usr/bin/etcdctl set /skydns/io/maestro/core-01 '{"host":"172.17.8.101"}'
+      ExecStart=/usr/bin/etcdctl set /skydns/io/maestro/core-02 '{"host":"172.17.8.102"}'
+      ExecStart=/usr/bin/etcdctl set /skydns/io/maestro/core-03 '{"host":"172.17.8.103"}'
+      ExecStart=/usr/bin/etcdctl set /skydns/io/maestro/registry '{"host":"172.17.8.100"}'
+      ExecStart=/usr/bin/etcdctl set /skydns/io/maestro/etcd/etcd1 '{"host":"172.17.8.101"}'
+      ExecStart=/usr/bin/etcdctl set /skydns/io/maestro/etcd/etcd2 '{"host":"172.17.8.102"}'
+      ExecStart=/usr/bin/etcdctl set /skydns/io/maestro/etcd/etcd3 '{"host":"172.17.8.103"}'
+      ExecStart=/usr/bin/etcdctl set /skydns/io/maestro/dns/ns/ns1 '{"host":"172.17.8.101"}'
+      ExecStart=/usr/bin/etcdctl set /skydns/io/maestro/dns/ns/ns2 '{"host":"172.17.8.102"}'
+      ExecStart=/usr/bin/etcdctl set /skydns/io/maestro/dns/ns/ns3 '{"host":"172.17.8.103"}'
+      ExecStart=/usr/bin/etcdctl set /skydns/io/maestro/www '{"host":"violino.maestro.io"}'
+      ExecStart=/usr/bin/systemctl stop update-engine.service
+      ExecStart=/usr/bin/etcdctl set /skydns/config '{"domain":"maestro.io","local":"local.maestro.io","dns_addr":"0.0.0.0:53","nameservers":["8.8.8.8:53","8.8.4.4:53"],"machines":["http://172.17.8.101:2379","http://172.17.8.102:2379","http://172.17.8.103:2379"],"discover":true}'
+
+      [Install]
+      WantedBy=user-config.target
+  - name: local-maestro.service
+    command: start
+    enable: true
+    content: |
+      [Unit]
+      Description=Initialise Maestro
+      After=maestro.service
+      Requires=maestro.service
+
+      [Service]
+      Type=oneshot
+      EnvironmentFile=/etc/environment
+      ExecStart=/usr/bin/etcdctl set /skydns/io/maestro/local/ns '{"host":"${COREOS_PRIVATE_IPV4}"}'
+      ExecStart=/usr/bin/etcdctl set /skydns/io/maestro/local/etcd '{"host":"${COREOS_PRIVATE_IPV4}"}'
+      ExecStart=/usr/bin/etcdctl set /skydns/io/maestro/local/core '{"host":"${COREOS_PRIVATE_IPV4}"}'
+      ExecStart=/usr/bin/etcdctl set /skydns/io/maestro/local/violino '{"host":"${COREOS_PRIVATE_IPV4}"}'
+
+      [Install]
+      WantedBy=user-config.target
+  - name: skydns.service
+    command: start
+    enable: true
+    content: |
+      [Unit]
+      Description=SkyDNS
+      After=local-maestro.service
+      Requires=local-maestro.service
+
+      [Service]
+      Restart=on-failure
+      RestartSec=5
+      TimeoutStartSec=10m
+      EnvironmentFile=/etc/environment
+      EnvironmentFile=/run/maestro/env/core/skydns.env
+      ExecStartPre=-/usr/bin/docker kill skydns
+      ExecStartPre=-/usr/bin/docker rm skydns
+      ExecStartPre=-/usr/bin/docker pull hub.maestro.io:5000/crisidev/skydns
+      ExecStartPre=-/usr/bin/etcdctl set /skydns/cluster/hosts/%m '{"host":"${COREOS_PRIVATE_IPV4}"}'
+      ExecStart=/usr/bin/docker run --rm --name skydns --net host \
+        -e MAESTRO_NODE=${MAESTRO_NODE} -e MAESTRO_USERNAME=${MAESTRO_USERNAME} -e MAESTRO_STAGE=${MAESTRO_STAGE} \
+        -e MAESTRO_APP=${MAESTRO_APP} -e MAESTRO_COMPONENT=${MAESTRO_COMPONENT}-%H -e MAESTRO_ID=1 \
+        hub.maestro.io:5000/crisidev/skydns -verbose
+      ExecStop=/usr/bin/docker stop skydns
+
+      [Install]
+      WantedBy=user-config.target
+  - name: spartito.service
+    command: start
+    enable: true
+    content: |
+      [Unit]
+      Description=Spartito Service Discovery
+      After=skydns.service
+      Requires=skydns.service
+
+      [Service]
+      Restart=on-failure
+      RestartSec=5
+      TimeoutStartSec=10m
+      EnvironmentFile=/etc/environment
+      EnvironmentFile=/run/maestro/env/core/spartito.env
+      ExecStartPre=-/usr/bin/docker kill spartito
+      ExecStartPre=-/usr/bin/docker rm spartito
+      ExecStartPre=-/usr/bin/docker pull hub.maestro.io:5000/crisidev/spartito
+      ExecStart=/usr/bin/docker run --rm --name spartito --add-host=etcd:${COREOS_PRIVATE_IPV4}\
+        -e HOST_IP=${COREOS_PRIVATE_IPV4} -e ETCD_HOST=${COREOS_PRIVATE_IPV4}:2379 \
+        -e MAESTRO_NODE=%H -e MAESTRO_USERNAME=${MAESTRO_USERNAME} -e MAESTRO_STAGE=${MAESTRO_STAGE} \
+        -e MAESTRO_APP=${MAESTRO_APP} -e MAESTRO_COMPONENT=${MAESTRO_COMPONENT}-%H -e MAESTRO_ID=1 \
+        -v /var/run/docker.sock:/var/run/docker.sock hub.maestro.io:5000/crisidev/spartito
+      ExecStop=/usr/bin/docker stop spartito
+
+      [Install]
+      WantedBy=user-config.target
+  - name: violino.service
+    command: start
+    enable: true
+    content: |
+      [Unit]
+      Description=Violino Nginx Proxy
+      After=spartito.service
+      Requires=spartito.service
+
+      [Service]
+      Restart=on-failure
+      RestartSec=5
+      TimeoutStartSec=10m
+      EnvironmentFile=/etc/environment
+      EnvironmentFile=/run/maestro/env/core/violino.env
+      ExecStartPre=-/usr/bin/docker kill violino
+      ExecStartPre=-/usr/bin/docker rm violino
+      ExecStartPre=-/usr/bin/docker pull hub.maestro.io:5000/crisidev/violino
+      ExecStartPre=/usr/bin/etcdctl set /skydns/io/maestro/violino/%H '{"host":"${COREOS_PRIVATE_IPV4}"}'
+      ExecStart=/usr/bin/docker run --rm --name violino -p 80:80 \
+        -e MAESTRO_NODE=%H -e MAESTRO_USERNAME=${MAESTRO_USERNAME} -e MAESTRO_STAGE=${MAESTRO_STAGE} \
+        -e MAESTRO_APP=${MAESTRO_APP} -e MAESTRO_COMPONENT=${MAESTRO_COMPONENT}-%H -e MAESTRO_ID=1 \
+        hub.maestro.io:5000/crisidev/violino
+      ExecStop=/usr/bin/docker stop violino
+      ExecStopPost=-/usr/bin/etcdctl rm /skydns/io/maestro/violino/%H
+
+      [Install]
+      WantedBy=user-config.target
+update:
+  reboot-strategy: false
+write_files:
+- path: /etc/hosts
+  content: |
+    172.17.8.100 hub.maestro.io
+    172.17.8.101 core-01
+    172.17.8.102 core-02
+    172.17.8.103 core-03
+- path: /etc/systemd/system/docker.service.d/50-insecure-registry.conf
+  content: |
+    [Service]
+    Environment='DOCKER_OPTS=--insecure-registry="172.17.8.0/24" --insecure-registry hub.maestro.io:5000 -dns $public_ipv4'
+- path: /run/maestro/env/core/skydns.env
+  content: |
+    MAESTRO_USERNAME=core
+    MAESTRO_STAGE=prod
+    MAESTRO_APP=maestro
+    MAESTRO_COMPONENT=skydns
+- path: /run/maestro/env/core/spartito.env
+  content: |
+    MAESTRO_USERNAME=core
+    MAESTRO_STAGE=prod
+    MAESTRO_APP=maestro
+    MAESTRO_COMPONENT=spartito
+- path: /run/maestro/env/core/violino.env
+  content: |
+    MAESTRO_USERNAME=core
+    MAESTRO_STAGE=prod
+    MAESTRO_APP=maestro
+    MAESTRO_COMPONENT=violino
