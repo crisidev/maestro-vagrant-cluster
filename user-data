@@ -90,7 +90,8 @@ coreos:
       ExecStart=/usr/bin/etcdctl set /skydns/io/maestro/local/etcd '{"host":"${COREOS_PRIVATE_IPV4}"}'
       ExecStart=/usr/bin/etcdctl set /skydns/io/maestro/local/core '{"host":"${COREOS_PRIVATE_IPV4}"}'
       ExecStart=/usr/bin/etcdctl set /skydns/io/maestro/local/violino '{"host":"${COREOS_PRIVATE_IPV4}"}'
-      ExecStart=/usr/bin/etcdctl set /skydns/io/maestro/local/node-exporter '{"host":"${COREOS_PRIVATE_IPV4}"}'
+      ExecStart=/usr/bin/etcdctl set /skydns/io/maestro/local/exporter '{"host":"${COREOS_PRIVATE_IPV4}"}'
+      ExecStart=/usr/bin/etcdctl set /skydns/io/maestro/local/cadvisor '{"host":"${COREOS_PRIVATE_IPV4}"}'
 
       [Install]
       WantedBy=user-config.target
