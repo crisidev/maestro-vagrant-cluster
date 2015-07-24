@@ -115,7 +115,7 @@ coreos:
       ExecStartPre=-/usr/bin/etcdctl set /skydns/cluster/hosts/%m '{"host":"${COREOS_PRIVATE_IPV4}"}'
       ExecStart=/usr/bin/docker run --rm --name skydns --net host \
         -e MAESTRO_NODE=${MAESTRO_NODE} -e MAESTRO_USERNAME=${MAESTRO_USERNAME} -e MAESTRO_STAGE=${MAESTRO_STAGE} \
-        -e MAESTRO_APP=${MAESTRO_APP} -e MAESTRO_COMPONENT=${MAESTRO_COMPONENT}-%H -e MAESTRO_ID=1 -e PROMETHEUS_PORT=9101 \
+        -e MAESTRO_APP=${MAESTRO_APP} -e MAESTRO_COMPONENT=${MAESTRO_COMPONENT}-%H -e MAESTRO_ID=1 -e PROMETHEUS_PORT=9102 \
         hub.maestro.io:5000/crisidev/skydns -verbose
       ExecStop=/usr/bin/docker stop skydns
 
@@ -194,12 +194,12 @@ coreos:
       ExecStartPre=-/usr/bin/docker kill cadvisor
       ExecStartPre=-/usr/bin/docker rm cadvisor
       ExecStartPre=-/usr/bin/docker pull google/cadvisor:latest
-      ExecStart=/usr/bin/docker run --rm --name cadvisor -e 8080 \
+      ExecStart=/usr/bin/docker run --rm --name cadvisor -e 9101 \
         -v /:/rootfs:ro -v /var/run:/var/run:rw -v /sys:/sys:ro -v /var/lib/docker/:/var/lib/docker:ro \
         -e MAESTRO_NODE=%H -e MAESTRO_USERNAME=${MAESTRO_USERNAME} -e MAESTRO_STAGE=${MAESTRO_STAGE} \
         -e MAESTRO_APP=${MAESTRO_APP} -e MAESTRO_COMPONENT=${MAESTRO_COMPONENT}-%H -e MAESTRO_ID=1 \
         -e MAESTRO_FRONTEND=${MAESTRO_FRONTEND} -e MAESTRO_PUBLISHED=${MAESTRO_PUBLISHED} \
-        google/cadvisor:latest
+        google/cadvisor:latest -port 9101
       ExecStop=/usr/bin/docker stop cadvisor
 
       [Install]
