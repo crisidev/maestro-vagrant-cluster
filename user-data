@@ -10,7 +10,6 @@ coreos:
     initial-advertise-peer-urls: http://$private_ipv4:2380
     listen-client-urls: http://0.0.0.0:2379,http://0.0.0.0:4001
     listen-peer-urls: http://$private_ipv4:2380,http://$private_ipv4:7001
-    discovery: https://discovery.etcd.io/4af72b5a7c40ba766d0cb36168e7bc39
   flannel:
     interface: $public_ipv4
   fleet:
@@ -115,7 +114,7 @@ coreos:
       ExecStartPre=-/usr/bin/etcdctl set /skydns/cluster/hosts/%m '{"host":"${COREOS_PRIVATE_IPV4}"}'
       ExecStart=/usr/bin/docker run --rm --name skydns --net host \
         -e MAESTRO_NODE=${MAESTRO_NODE} -e MAESTRO_USERNAME=${MAESTRO_USERNAME} -e MAESTRO_STAGE=${MAESTRO_STAGE} \
-        -e MAESTRO_APP=${MAESTRO_APP} -e MAESTRO_COMPONENT=${MAESTRO_COMPONENT}-%H -e MAESTRO_ID=1 \
+        -e MAESTRO_APP=${MAESTRO_APP} -e MAESTRO_COMPONENT=${MAESTRO_COMPONENT}-%H -e MAESTRO_ID=1 -e PROMETHEUS_PORT=3030 \
         hub.maestro.io:5000/crisidev/skydns -verbose
       ExecStop=/usr/bin/docker stop skydns
 
@@ -176,6 +175,36 @@ coreos:
 
       [Install]
       WantedBy=user-config.target
+  - name: cadvisor.service
+    command: start
+    enable: true
+    content: |
+      [Unit]
+      Description=Google Cadvisor
+      After=maestro.service
+      Requires=maestro.service
+
+      [Service]
+      Restart=on-failure
+      RestartSec=5
+      TimeoutStartSec=10m
+      EnvironmentFile=/etc/environment
+      EnvironmentFile=/run/maestro/env/core/cadvisor.env
+      ExecStartPre=-/usr/bin/docker kill cadvisor
+      ExecStartPre=-/usr/bin/docker rm cadvisor
+      ExecStartPre=-/usr/bin/docker pull google/cadvisor:latest
+      ExecStartPre=/usr/bin/etcdctl set /skydns/io/maestro/cadvisor/%H '{"host":"${COREOS_PRIVATE_IPV4}"}'
+      ExecStart=/usr/bin/docker run --rm --name cadvisor -e 8080 \
+        -v /:/rootfs:ro -v /var/run:/var/run:rw -v /sys:/sys:ro -v /var/lib/docker/:/var/lib/docker:ro \
+        -e MAESTRO_NODE=%H -e MAESTRO_USERNAME=${MAESTRO_USERNAME} -e MAESTRO_STAGE=${MAESTRO_STAGE} \
+        -e MAESTRO_APP=${MAESTRO_APP} -e MAESTRO_COMPONENT=${MAESTRO_COMPONENT}-%H -e MAESTRO_ID=1 \
+        -e MAESTRO_FRONTEND=${MAESTRO_FRONTEND} -e MAESTRO_PUBLISHED=${MAESTRO_PUBLISHED} \
+        google/cadvisor:latest
+      ExecStop=/usr/bin/docker stop cadvisor
+      ExecStopPost=-/usr/bin/etcdctl rm /skydns/io/maestro/violino/%H
+
+      [Install]
+      WantedBy=user-config.target
 update:
   reboot-strategy: false
 write_files:
@@ -207,3 +236,11 @@ write_files:
     MAESTRO_STAGE=prod
     MAESTRO_APP=maestro
     MAESTRO_COMPONENT=violino
+- path: /run/maestro/env/core/cadvisor.env
+  content: |
+    MAESTRO_USERNAME=core
+    MAESTRO_STAGE=prod
+    MAESTRO_APP=maestro
+    MAESTRO_COMPONENT=cadvisor
+    MAESTRO_FRONTEND=true
+    MAESTRO_PUBLISHED=true
