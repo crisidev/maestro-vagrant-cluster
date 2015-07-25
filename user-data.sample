@@ -10,7 +10,6 @@ coreos:
     initial-advertise-peer-urls: http://$private_ipv4:2380
     listen-client-urls: http://0.0.0.0:2379,http://0.0.0.0:4001
     listen-peer-urls: http://$private_ipv4:2380,http://$private_ipv4:7001
-    discovery: https://discovery.etcd.io/7329d5d0b2a33906f3c6e9f717098024
   flannel:
     interface: $public_ipv4
   fleet:
@@ -117,7 +116,7 @@ coreos:
       ExecStartPre=-/usr/bin/etcdctl set /skydns/cluster/hosts/%m '{"host":"${COREOS_PRIVATE_IPV4}"}'
       ExecStart=/usr/bin/docker run --rm --name skydns --net host \
         -e MAESTRO_NODE=${MAESTRO_NODE} -e MAESTRO_USERNAME=${MAESTRO_USERNAME} -e MAESTRO_STAGE=${MAESTRO_STAGE} \
-        -e MAESTRO_APP=${MAESTRO_APP} -e MAESTRO_COMPONENT=${MAESTRO_COMPONENT}-%H -e MAESTRO_ID=1 -e PROMETHEUS_PORT=9102 \
+        -e MAESTRO_APP=${MAESTRO_APP} -e MAESTRO_COMPONENT=${MAESTRO_COMPONENT}-%H -e MAESTRO_ID=1 -e PROMETHEUS_PORT=3000 \
         hub.maestro.io:5000/crisidev/skydns -verbose
       ExecStop=/usr/bin/docker stop skydns
 
