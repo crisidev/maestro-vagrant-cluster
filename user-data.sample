@@ -177,60 +177,6 @@ coreos:
 
       [Install]
       WantedBy=user-config.target
-  - name: cadvisor.service
-    command: start
-    enable: true
-    content: |
-      [Unit]
-      Description=Google Cadvisor
-      After=maestro.service
-      Requires=maestro.service
-
-      [Service]
-      Restart=on-failure
-      RestartSec=5
-      TimeoutStartSec=10m
-      EnvironmentFile=/etc/environment
-      EnvironmentFile=/run/maestro/env/core/cadvisor.env
-      ExecStartPre=-/usr/bin/docker kill cadvisor
-      ExecStartPre=-/usr/bin/docker rm cadvisor
-      ExecStartPre=-/usr/bin/docker pull google/cadvisor:latest
-      ExecStart=/usr/bin/docker run --rm --name cadvisor -e 8080 \
-        -v /:/rootfs:ro -v /var/run:/var/run:rw -v /sys:/sys:ro -v /var/lib/docker/:/var/lib/docker:ro \
-        -e MAESTRO_NODE=%H -e MAESTRO_USERNAME=${MAESTRO_USERNAME} -e MAESTRO_STAGE=${MAESTRO_STAGE} \
-        -e MAESTRO_APP=${MAESTRO_APP} -e MAESTRO_COMPONENT=${MAESTRO_COMPONENT} -e MAESTRO_ID=1 \
-        -e MAESTRO_FRONTEND=${MAESTRO_FRONTEND} -e MAESTRO_GLOBAL=${MAESTRO_GLOBAL} -e MAESTRO_DNS=${MAESTRO_DNS}-%H \
-        google/cadvisor:latest
-      ExecStop=/usr/bin/docker stop cadvisor
-
-      [Install]
-      WantedBy=user-config.target
-  - name: exporter.service
-    command: start
-    enable: true
-    content: |
-      [Unit]
-      Description=Prometheus Node Exporter
-      After=maestro.service
-      Requires=maestro.service
-
-      [Service]
-      Restart=on-failure
-      RestartSec=5
-      TimeoutStartSec=10m
-      EnvironmentFile=/etc/environment
-      EnvironmentFile=/run/maestro/env/core/exporter.env
-      ExecStartPre=-/usr/bin/docker kill exporter
-      ExecStartPre=-/usr/bin/docker rm exporter
-      ExecStartPre=-/usr/bin/docker pull prom/node-exporter
-      ExecStart=/usr/bin/docker run --rm --name exporter --net="host" \
-        -e MAESTRO_NODE=%H -e MAESTRO_USERNAME=${MAESTRO_USERNAME} -e MAESTRO_STAGE=${MAESTRO_STAGE} \
-        -e MAESTRO_APP=${MAESTRO_APP} -e MAESTRO_COMPONENT=${MAESTRO_COMPONENT} -e MAESTRO_ID=1 -e MAESTRO_GLOBAL=${MAESTRO_GLOBAL} \
-        prom/node-exporter
-      ExecStop=/usr/bin/docker stop exporter
-
-      [Install]
-      WantedBy=user-config.target
 update:
   reboot-strategy: false
 write_files:
@@ -264,20 +210,4 @@ write_files:
     MAESTRO_STAGE=prod
     MAESTRO_APP=maestro
     MAESTRO_COMPONENT=violino
-    MAESTRO_GLOBAL=true
-- path: /run/maestro/env/core/cadvisor.env
-  content: |
-    MAESTRO_USERNAME=crisidev
-    MAESTRO_STAGE=prod
-    MAESTRO_APP=maestro
-    MAESTRO_COMPONENT=cadvisor
-    MAESTRO_FRONTEND=true
-    MAESTRO_GLOBAL=true
-    MAESTRO_DNS=cadvisor
-- path: /run/maestro/env/core/exporter.env
-  content: |
-    MAESTRO_USERNAME=crisidev
-    MAESTRO_STAGE=prod
-    MAESTRO_APP=maestro
-    MAESTRO_COMPONENT=exporter
     MAESTRO_GLOBAL=true
