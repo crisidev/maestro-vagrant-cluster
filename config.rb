@@ -69,7 +69,7 @@ $expose_etcd_tcp=2379
 
 # Customize VMs
 $vm_gui = false
-$vm_memory = 512
+$vm_memory = 768
 $vm_cpus = 2
 
 # Share additional folders to the CoreOS VMs
