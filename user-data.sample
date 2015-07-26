@@ -24,7 +24,7 @@ coreos:
     - name: 50-network-config.conf
       content: |
         [Service]
-        ExecStartPre=/usr/bin/etcdctl set /coreos.com/network/config '{"Network": "10.1.0.0/16"}'
+        ExecStartPre=/usr/bin/etcdctl set /coreos.com/network/config '{"Network":"10.1.0.0/16","SubnetLen":24,"SubnetMin":"10.1.1.0","SubnetMax":"10.1.10.0"}'
   - name: fleet.service
     command: start
   - name: docker-tcp.socket
