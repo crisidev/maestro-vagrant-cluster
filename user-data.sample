@@ -58,10 +58,11 @@ coreos:
       ExecStart=/usr/bin/mkdir -p /run/maestro/containers
       ExecStart=-/usr/bin/etcdctl mkdir /maestro.io/apps
       ExecStart=-/usr/bin/etcdctl mkdir /maestro.io/apps/user
+      ExecStart=/usr/bin/etcdctl set /skydns/io/maestro/core '{"host":"172.17.8.101"}'
       ExecStart=/usr/bin/etcdctl set /skydns/io/maestro/hub '{"host":"172.17.8.100"}'
-      ExecStart=/usr/bin/etcdctl set /skydns/io/maestro/core-01 '{"host":"172.17.8.101"}'
-      ExecStart=/usr/bin/etcdctl set /skydns/io/maestro/core-02 '{"host":"172.17.8.102"}'
-      ExecStart=/usr/bin/etcdctl set /skydns/io/maestro/core-03 '{"host":"172.17.8.103"}'
+      ExecStart=/usr/bin/etcdctl set /skydns/io/maestro/core-01/1 '{"host":"172.17.8.101"}'
+      ExecStart=/usr/bin/etcdctl set /skydns/io/maestro/core-02/1 '{"host":"172.17.8.102"}'
+      ExecStart=/usr/bin/etcdctl set /skydns/io/maestro/core-03/1 '{"host":"172.17.8.103"}'
       ExecStart=/usr/bin/etcdctl set /skydns/io/maestro/registry '{"host":"172.17.8.100"}'
       ExecStart=/usr/bin/etcdctl set /skydns/io/maestro/etcd/etcd1 '{"host":"172.17.8.101"}'
       ExecStart=/usr/bin/etcdctl set /skydns/io/maestro/etcd/etcd2 '{"host":"172.17.8.102"}'
