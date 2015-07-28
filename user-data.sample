@@ -41,6 +41,17 @@ coreos:
 
       [Install]
       WantedBy=sockets.target
+  - name: systemd-journal-gatewayd.socket
+    command: start
+    enable: true
+    content: |
+      [Unit]
+      Description=Journal Gateway Service Socket
+      [Socket]
+      ListenStream=/var/run/journald.sock
+      Service=systemd-journal-gatewayd.service
+      [Install]
+      WantedBy=sockets.target
   - name: maestro.service
     command: start
     enable: true
