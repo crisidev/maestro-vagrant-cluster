@@ -103,8 +103,7 @@ coreos:
       ExecStart=/usr/bin/etcdctl set /skydns/io/maestro/local/etcd '{"host":"${COREOS_PRIVATE_IPV4}"}'
       ExecStart=/usr/bin/etcdctl set /skydns/io/maestro/local/core '{"host":"${COREOS_PRIVATE_IPV4}"}'
       ExecStart=/usr/bin/etcdctl set /skydns/io/maestro/local/violino '{"host":"${COREOS_PRIVATE_IPV4}"}'
-      ExecStart=/usr/bin/etcdctl set /skydns/io/maestro/local/exporter '{"host":"${COREOS_PRIVATE_IPV4}"}'
-      ExecStart=/usr/bin/etcdctl set /skydns/io/maestro/local/cadvisor '{"host":"${COREOS_PRIVATE_IPV4}"}'
+      ExecStart=/usr/bin/etcdctl set /skydns/io/maestro/local/logspout '{"host":"${COREOS_PRIVATE_IPV4}"}'
 
       [Install]
       WantedBy=user-config.target
@@ -130,7 +129,7 @@ coreos:
       ExecStart=/usr/bin/docker run --rm --name skydns --net host \
         -e MAESTRO_NODE=%H -e MAESTRO_USERNAME=${MAESTRO_USERNAME} -e MAESTRO_STAGE=${MAESTRO_STAGE} \
         -e MAESTRO_APP=${MAESTRO_APP} -e MAESTRO_COMPONENT=${MAESTRO_COMPONENT} -e MAESTRO_ID=1 -e MAESTRO_GLOBAL=${MAESTRO_GLOBAL} -e PROMETHEUS_PORT=3000 \
-        hub.maestro.io:5000/crisidev/skydns -verbose
+        hub.maestro.io:5000/crisidev/skydns
       ExecStop=/usr/bin/docker stop skydns
 
       [Install]
@@ -190,6 +189,34 @@ coreos:
 
       [Install]
       WantedBy=user-config.target
+  - name: logspout.service
+    command: start
+    enable: true
+    content: |
+      [Unit]
+      Description=LogSpout Logs Streaming
+      After=violino.service
+      Requires=violino.service
+
+      [Service]
+      Restart=on-failure
+      RestartSec=5
+      TimeoutStartSec=10m
+      EnvironmentFile=/etc/environment
+      EnvironmentFile=/run/maestro/env/core/logspout.env
+      ExecStartPre=-/usr/bin/docker kill logspout
+      ExecStartPre=-/usr/bin/docker rm logspout
+      ExecStartPre=-/usr/bin/docker pull gliderlabs/logspout
+      ExecStartPre=/usr/bin/etcdctl set /skydns/io/maestro/logspout/%H '{"host":"${COREOS_PRIVATE_IPV4}"}'
+      ExecStart=/usr/bin/docker run --rm --name logspout -p 8000:8000 \
+        -e MAESTRO_NODE=%H -e MAESTRO_USERNAME=${MAESTRO_USERNAME} -e MAESTRO_STAGE=${MAESTRO_STAGE} \
+        -e MAESTRO_APP=${MAESTRO_APP} -e MAESTRO_COMPONENT=${MAESTRO_COMPONENT} -e MAESTRO_ID=1 -e MAESTRO_GLOBAL=${MAESTRO_GLOBAL} \
+        -v /var/run/docker.sock:/tmp/docker.sock gliderlabs/logspout
+      ExecStop=/usr/bin/docker stop logspout
+      ExecStopPost=-/usr/bin/etcdctl rm /skydns/io/maestro/logspout/%H
+
+      [Install]
+      WantedBy=user-config.target
 update:
   reboot-strategy: false
 write_files:
@@ -223,4 +250,11 @@ write_files:
     MAESTRO_STAGE=prod
     MAESTRO_APP=maestro
     MAESTRO_COMPONENT=violino
+    MAESTRO_GLOBAL=true
+- path: /run/maestro/env/core/logspout.env
+  content: |
+    MAESTRO_USERNAME=crisidev
+    MAESTRO_STAGE=prod
+    MAESTRO_APP=maestro
+    MAESTRO_COMPONENT=logspout
     MAESTRO_GLOBAL=true
