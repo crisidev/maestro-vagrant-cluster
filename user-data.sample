@@ -69,12 +69,12 @@ coreos:
       ExecStart=/usr/bin/mkdir -p /run/maestro/containers
       ExecStart=-/usr/bin/etcdctl mkdir /maestro.io/apps
       ExecStart=-/usr/bin/etcdctl mkdir /maestro.io/apps/user
-      ExecStart=/usr/bin/etcdctl set /skydns/io/maestro/core '{"host":"172.17.8.101"}'
+      ExecStart=-/usr/bin/etcdctl mkdir /maestro.io/apps/backends
       ExecStart=/usr/bin/etcdctl set /skydns/io/maestro/hub '{"host":"172.17.8.100"}'
-      ExecStart=/usr/bin/etcdctl set /skydns/io/maestro/core-01/1 '{"host":"172.17.8.101"}'
-      ExecStart=/usr/bin/etcdctl set /skydns/io/maestro/core-02/1 '{"host":"172.17.8.102"}'
-      ExecStart=/usr/bin/etcdctl set /skydns/io/maestro/core-03/1 '{"host":"172.17.8.103"}'
       ExecStart=/usr/bin/etcdctl set /skydns/io/maestro/registry '{"host":"172.17.8.100"}'
+      ExecStart=/usr/bin/etcdctl set /skydns/io/maestro/core-01 '{"host":"172.17.8.101"}'
+      ExecStart=/usr/bin/etcdctl set /skydns/io/maestro/core-02 '{"host":"172.17.8.102"}'
+      ExecStart=/usr/bin/etcdctl set /skydns/io/maestro/core-03 '{"host":"172.17.8.103"}'
       ExecStart=/usr/bin/etcdctl set /skydns/io/maestro/etcd/etcd1 '{"host":"172.17.8.101"}'
       ExecStart=/usr/bin/etcdctl set /skydns/io/maestro/etcd/etcd2 '{"host":"172.17.8.102"}'
       ExecStart=/usr/bin/etcdctl set /skydns/io/maestro/etcd/etcd3 '{"host":"172.17.8.103"}'
@@ -83,27 +83,7 @@ coreos:
       ExecStart=/usr/bin/etcdctl set /skydns/io/maestro/dns/ns/ns3 '{"host":"172.17.8.103"}'
       ExecStart=/usr/bin/etcdctl set /skydns/io/maestro/www '{"host":"violino.maestro.io"}'
       ExecStart=/usr/bin/systemctl stop update-engine.service
-      ExecStart=/usr/bin/etcdctl set /skydns/config '{"domain":"maestro.io","local":"local.maestro.io","dns_addr":"0.0.0.0:53","nameservers":["8.8.8.8:53","8.8.4.4:53"],"machines":["http://172.17.8.101:2379","http://172.17.8.102:2379","http://172.17.8.103:2379"],"discover":true}'
-
-      [Install]
-      WantedBy=user-config.target
-  - name: local-maestro.service
-    command: start
-    enable: true
-    content: |
-      [Unit]
-      Description=Initialise Maestro
-      After=maestro.service
-      Requires=maestro.service
-
-      [Service]
-      Type=oneshot
-      EnvironmentFile=/etc/environment
-      ExecStart=/usr/bin/etcdctl set /skydns/io/maestro/local/ns '{"host":"${COREOS_PRIVATE_IPV4}"}'
-      ExecStart=/usr/bin/etcdctl set /skydns/io/maestro/local/etcd '{"host":"${COREOS_PRIVATE_IPV4}"}'
-      ExecStart=/usr/bin/etcdctl set /skydns/io/maestro/local/core '{"host":"${COREOS_PRIVATE_IPV4}"}'
-      ExecStart=/usr/bin/etcdctl set /skydns/io/maestro/local/violino '{"host":"${COREOS_PRIVATE_IPV4}"}'
-      ExecStart=/usr/bin/etcdctl set /skydns/io/maestro/local/logspout '{"host":"${COREOS_PRIVATE_IPV4}"}'
+      ExecStart=/usr/bin/etcdctl set /skydns/config '{"domain":"maestro.io","dns_addr":"0.0.0.0:53","nameservers":["8.8.8.8:53","8.8.4.4:53"],"machines":["http://172.17.8.101:2379","http://172.17.8.102:2379","http://172.17.8.103:2379"],"discover":true}'
 
       [Install]
       WantedBy=user-config.target
@@ -113,8 +93,8 @@ coreos:
     content: |
       [Unit]
       Description=SkyDNS
-      After=local-maestro.service
-      Requires=local-maestro.service
+      After=maestro.service
+      Requires=maestro.service
 
       [Service]
       Restart=on-failure
@@ -124,12 +104,12 @@ coreos:
       EnvironmentFile=/run/maestro/env/core/skydns.env
       ExecStartPre=-/usr/bin/docker kill skydns
       ExecStartPre=-/usr/bin/docker rm skydns
-      ExecStartPre=-/usr/bin/docker pull hub.maestro.io:5000/crisidev/skydns
+      ExecStartPre=-/usr/bin/docker pull skynetservices/skydns
       ExecStartPre=-/usr/bin/etcdctl set /skydns/cluster/hosts/%m '{"host":"${COREOS_PRIVATE_IPV4}"}'
       ExecStart=/usr/bin/docker run --rm --name skydns --net host \
         -e MAESTRO_NODE=%H -e MAESTRO_USERNAME=${MAESTRO_USERNAME} -e MAESTRO_STAGE=${MAESTRO_STAGE} \
         -e MAESTRO_APP=${MAESTRO_APP} -e MAESTRO_COMPONENT=${MAESTRO_COMPONENT} -e MAESTRO_ID=1 -e MAESTRO_GLOBAL=${MAESTRO_GLOBAL} -e PROMETHEUS_PORT=3000 \
-        hub.maestro.io:5000/crisidev/skydns
+        skynetservices/skydns
       ExecStop=/usr/bin/docker stop skydns
 
       [Install]
@@ -180,7 +160,7 @@ coreos:
       ExecStartPre=-/usr/bin/docker rm violino
       ExecStartPre=-/usr/bin/docker pull hub.maestro.io:5000/crisidev/violino
       ExecStartPre=/usr/bin/etcdctl set /skydns/io/maestro/violino/%H '{"host":"${COREOS_PRIVATE_IPV4}"}'
-      ExecStart=/usr/bin/docker run --rm --name violino -p 80:80 \
+      ExecStart=/usr/bin/docker run --rm --name violino -p 80:80 --add-host=logspout.maestro.io:${COREOS_PRIVATE_IPV4} \
         -e MAESTRO_NODE=%H -e MAESTRO_USERNAME=${MAESTRO_USERNAME} -e MAESTRO_STAGE=${MAESTRO_STAGE} \
         -e MAESTRO_APP=${MAESTRO_APP} -e MAESTRO_COMPONENT=${MAESTRO_COMPONENT} -e MAESTRO_ID=1 -e MAESTRO_GLOBAL=${MAESTRO_GLOBAL} \
         hub.maestro.io:5000/crisidev/violino
